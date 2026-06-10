@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>איקס עיגול דינמי</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loginModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(7,16,36,0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; direction: rtl;">
+        <form id="loginForm" style="background: rgba(30,41,59,0.9); padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1);">
+            <h2 style="margin-bottom: 25px; font-size: 2rem;">התחברות למשחק</h2>
+            <input type="text" id="loginUser" placeholder="שם משתמש" style="margin: 10px; padding: 12px; border-radius: 8px; border: none; width: 220px; font-size: 1rem; text-align: center;" required><br>
+            <input type="password" id="loginPass" placeholder="סיסמה" style="margin: 10px; padding: 12px; border-radius: 8px; border: none; width: 220px; font-size: 1rem; text-align: center;" required><br>
+            <button id="loginBtn" type="submit" style="margin-top: 25px; padding: 12px 40px; border: none; border-radius: 8px; background: #3b82f6; color: white; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: 0.2s;">היכנס</button>
+            <p id="loginError" style="color: #ef4444; display: none; margin-top: 15px; font-weight: bold;">שם משתמש או סיסמה שגויים!</p>
+        </form>
+    </div>
+
+    <div id="adminPanel" class="admin-panel" style="display: none;">
+        <div class="admin-title">👑 פאנל ניהול</div>
+        <button onclick="requestAdminData('get_users')">👥 משתמשים במערכת</button>
+        <button onclick="requestAdminData('get_games')">🎮 היסטוריית משחקים</button>
+    </div>
+
+    <div id="adminModal" class="admin-modal" style="display: none;">
+        <div class="admin-modal-content">
+            <button class="close-admin-btn" onclick="closeAdminModal()">✖ סגור חלון</button>
+            <h2 id="adminModalTitle">נתונים</h2>
+            <div class="table-responsive">
+                <table id="adminTable">
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-orbs" aria-hidden="true"></div>
+    <div class="container">
+        <div class="layout">
+            <aside class="controls" role="region" aria-label="בקרות משחק">
+                <div class="group">
+                    <label>בחר מצב משחק</label>
+                    <div class="mode-buttons" role="tablist" aria-label="מצב משחק">
+                        <button class="mode active" data-mode="local" role="tab" aria-selected="true">1 VS 1</button>
+                        <button class="mode" data-mode="ai" role="tab" aria-selected="false">AI</button>
+                        <button class="mode" data-mode="online" role="tab" aria-selected="false">Online</button>
+                    </div>
+                </div>
+                <div class="group">
+                    <label for="cols">רוחב הלוח (עמודות)</label>
+                    <input type="number" id="cols" min="3" max="50" value="3">
+                </div>
+                <div class="group">
+                    <label for="rows">אורך הלוח (שורות)</label>
+                    <input type="number" id="rows" min="3" max="50" value="3">
+                </div>
+                <div class="group">
+                    <label for="winLength">רצף לניצחון</label>
+                    <input type="number" id="winLength" min="3" max="50" value="3">
+                </div>
+                <div class="group" style="margin-top:6px;">
+                    <button id="resetBtn" type="button">משחק חדש</button>
+                </div>
+            </aside>
+            <main class="main" role="main">
+                <div class="title">
+                    <h1>איקס עיגול דינמי</h1>
+                </div>
+                <div class="board-wrap" aria-live="polite">
+                    <div id="board" class="board" aria-label="לוח משחק"></div>
+                </div>
+                <div id="status" role="status" aria-live="polite"></div>
+            </main>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

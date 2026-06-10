@@ -1,0 +1,407 @@
+:root {
+    --bg1: #071024;
+    --bg2: #0f172a;
+    --panel: rgba(30,41,59,0.85);
+    --accent: #3b82f6;
+    --accent2: #ef4444;
+    --glass: rgba(255,255,255,0.04);
+    --gap: 4px; /* <<< רווח צר יותר (פס דק) */
+    --controls-width: 200px;
+    --controls-left-offset: 6px;
+    --title-right-offset: 12px;
+    --title-width: 260px;
+    --top-gap: 78px;
+}
+
+/* בסיס */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(160deg, var(--bg1) 0%, var(--bg2) 100%);
+    color: white;
+    direction: rtl;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    padding-top: var(--top-gap);
+}
+
+.bg-orbs {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: radial-gradient(800px 800px at 10% 10%, rgba(59,130,246,0.06), transparent 12%), radial-gradient(600px 600px at 90% 80%, rgba(239,68,68,0.04), transparent 10%);
+    mix-blend-mode: screen;
+    opacity: 0.9;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 18px calc(var(--title-width) + var(--title-right-offset) + 12px) 18px calc(var(--controls-width) + 22px);
+    position: relative;
+    z-index: 2;
+    min-height: calc(100vh - var(--top-gap));
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: var(--controls-width) 1fr;
+    gap: 18px;
+    align-items: stretch;
+    direction: ltr;
+    height: 100%;
+}
+
+/* פאנל */
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+    border: 1px solid rgba(255,255,255,0.03);
+    position: fixed;
+    left: var(--controls-left-offset);
+    top: 18px;
+    width: var(--controls-width);
+    max-height: calc(100vh - 36px);
+    overflow: auto;
+    z-index: 1000;
+    direction: rtl;
+}
+
+    .controls button {
+        padding: 10px 12px;
+        font-size: 0.98rem;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(180deg, var(--accent), #2563eb);
+        color: #fff;
+        cursor: pointer;
+        transition: transform .08s ease, box-shadow .12s ease;
+    }
+
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(59,130,246,0.12);
+        }
+
+.mode-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+    .mode-buttons .mode {
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.03);
+        color: #e6eef8;
+        border: 1px solid rgba(255,255,255,0.02);
+        cursor: pointer;
+        transition: transform .08s ease, box-shadow .12s ease;
+    }
+
+        .mode-buttons .mode.active {
+            background: linear-gradient(180deg, var(--accent), #2563eb);
+            box-shadow: 0 6px 18px rgba(37,99,235,0.12);
+            color: white;
+        }
+
+/* כותרת fixed מימין */
+.title {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    position: relative;
+    z-index: 900;
+}
+
+    .title h1 {
+        margin: 0;
+        font-size: clamp(1.4rem, 3.6vw, 2.2rem);
+        font-weight: 800;
+        color: #f8fafc;
+        white-space: nowrap;
+        position: fixed;
+        right: var(--title-right-offset);
+        top: 22px;
+        width: var(--title-width);
+        text-align: right;
+        overflow: hidden;
+    }
+
+/* main / board-wrap */
+.main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    height: 100%;
+    min-height: 260px;
+}
+
+/* board */
+.board {
+    --cols: 3;
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: repeat(var(--cols), 1fr);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.06);
+    box-sizing: border-box;
+    align-content: center;
+    justify-content: center;
+    overflow: hidden; /* מונע גלישה מחוץ למסגרת */
+    width: 100% !important; /* למלא את ה-board-wrap */
+    height: 100% !important; /* למלא אנכית */
+    max-width: none;
+    max-height: none;
+    padding: 14px; /* מסגרת פנימית בולטת יותר */
+    --cell-size: clamp(18px, 9vmin, 160px);
+    grid-auto-rows: var(--cell-size);
+    box-shadow: 0 18px 40px rgba(2,6,23,0.55);
+}
+
+/* התא */
+.cell {
+    background: #020617;
+    border: 1px solid rgba(255,255,255,0.02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    color: #cbd5e1;
+    transition: transform .08s ease, background .12s ease;
+    font-size: calc(var(--cell-size, 48px) * 0.55);
+    width: var(--cell-size, auto);
+    height: var(--cell-size, auto);
+    border-radius: 6px;
+}
+
+    .cell:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(2,6,23,0.35);
+    }
+
+    .cell.X {
+        color: var(--accent);
+        font-weight: 700;
+    }
+
+    .cell.O {
+        color: var(--accent2);
+        font-weight: 700;
+    }
+
+#status {
+    margin-top: 6px;
+    font-size: 1.05rem;
+    text-align: center;
+    color: #e6eef8;
+}
+
+/* הלוח תופס יותר מקום אופק/אנכי */
+.board-wrap {
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 12px; /* יותר "אוויר" סביב הלוח */
+    align-items: stretch; /* ממתח את ה-board לגובה */
+}
+
+/* תיקון היפוך הטקסט בכפתור 1 VS 1 */
+.mode-buttons .mode[data-mode="local"] {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+/* ========================================================
+   מערכת פאנל הניהול החדשה (Admin Panel & Modal Layout)
+   ======================================================== */
+
+/* פאנל כפתורי מנהל בצד ימין */
+.admin-panel {
+    position: fixed;
+    right: 20px;
+    top: calc(var(--top-gap) + 40px);
+    background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 8px 30px rgba(2,6,23,0.8);
+    padding: 15px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 950;
+    width: 200px;
+}
+
+.admin-title {
+    color: var(--accent);
+    font-weight: bold;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+}
+
+.admin-panel button {
+    background: linear-gradient(180deg, #475569, #334155);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+    .admin-panel button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255,255,255,0.1);
+    }
+
+/* חלון קופץ לטבלאות (Modal) */
+.admin-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.admin-modal-content {
+    background: var(--bg2);
+    border: 1px solid var(--accent);
+    box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.close-admin-btn {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: var(--accent2);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+    .close-admin-btn:hover {
+        background: #dc2626;
+    }
+
+.admin-modal-content h2 {
+    margin-top: 0;
+    text-align: center;
+    color: var(--accent);
+}
+
+/* עיצוב הטבלאות הדינמיות */
+.table-responsive {
+    overflow-y: auto;
+    margin-top: 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+#adminTable {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: right;
+    color: #e6eef8;
+}
+
+    #adminTable th {
+        background: rgba(59,130,246,0.2);
+        padding: 12px;
+        position: sticky;
+        top: 0;
+        backdrop-filter: blur(4px);
+    }
+
+    #adminTable td {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    #adminTable tr:hover {
+        background: rgba(255,255,255,0.03);
+    }
+
+/* רספונסיביות ומובייל */
+@media (max-width:900px) {
+    .controls {
+        position: relative;
+        left: 0;
+        top: 0;
+        width: 100%;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .container {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .layout {
+        grid-template-columns: 1fr;
+    }
+
+    .title h1 {
+        position: relative;
+        right: 0;
+        top: 0;
+        width: auto;
+        text-align: center;
+    }
+
+    .admin-panel {
+        position: relative;
+        right: 0;
+        top: 0;
+        width: 100%;
+        margin-top: 15px;
+    }
+}
+/* תיקון כיווניות לשורת הסטטוס */
+#status {
+    direction: rtl;
+    text-align: center; /* או right, מה שמתאים לעיצוב שלך */
+}
+
+/* תיקון כיווניות לחלון פאנל הניהול והטבלאות */
+#adminModal, #adminTable {
+    direction: rtl;
+    text-align: right;
+}
