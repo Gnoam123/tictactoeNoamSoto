@@ -109,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // === תיקון מיקום: טיפול בקבלת הנתונים מהשרת לפאנל הניהול (לפני חסימת האונליין) ===
+            // === טיפול בקבלת הנתונים מהשרת לפאנל הניהול ===
             if (data.action === "admin_users_data") {
                 renderAdminTable("👥 רשימת משתמשים", ["שם משתמש"], data.data.map(u => [u]));
                 return;
@@ -428,7 +428,11 @@ function makeMove(r, c, player, cell = null) {
         }
     }
 
-    if (isDraw()) { gameOver = true; updateStatus("תיקו!"); }
+    if (isDraw()) {
+        gameOver = true;
+        updateStatus("תיקו!");
+        checkAndSaveGame("תיקו");
+    }
     else updateStatus();
 }
 
@@ -437,6 +441,21 @@ function checkAndSaveGame(winnerPiece) {
 
     let p1 = playerXUser || "Unknown";
     let p2 = playerOUser || "Unknown";
+
+    // טיפול במצב של תיקו
+    if (winnerPiece === "תיקו") {
+        if (myRole === "X") {
+            ws.send(JSON.stringify({
+                action: "save_game",
+                user1: p1,
+                user2: p2,
+                winner: "תיקו"
+            }));
+        }
+        return;
+    }
+
+    // ניצחון של אחד השחקנים
     let winnerName = (winnerPiece === "X") ? p1 : p2;
 
     if (currentUser === winnerName) {
