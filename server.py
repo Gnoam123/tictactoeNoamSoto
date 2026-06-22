@@ -1,4 +1,4 @@
-# -*- coding: windows-1255 -*-
+# -*- coding: utf-8 -*-
 import asyncio
 import websockets
 import json
@@ -9,7 +9,7 @@ DB_PATH = os.path.abspath("Database.accdb")
 CONN_STR = rf'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={DB_PATH};'
 
 clients = set()
-# connected_players ιωξεψ ςλωιε βν δΰν δξωϊξω πξφΰ ατεςμ αξφα ΰεπμιιο
+# connected_players Χ™Χ©ΧΧ•Χ¨ ΧΆΧ›Χ©Χ™Χ• Χ’Χ Χ”ΧΧ Χ”ΧΧ©ΧªΧΧ© Χ ΧΧ¦Χ Χ‘Χ¤Χ•ΧΆΧ Χ‘ΧΧ¦Χ‘ ΧΧ•Χ ΧΧ™Χ™Χ
 connected_players = {} 
 available_roles = ["X", "O"] 
 game_settings = {"rows": 3, "cols": 3, "winLength": 3} 
@@ -41,7 +41,7 @@ def get_all_users():
     try:
         conn = pyodbc.connect(CONN_STR)
         cursor = conn.cursor()
-        # ωεμτιν ψχ ωξεϊ ξωϊξω λγι μωξεψ ςμ ΰαθηϊ ριρξΰεϊ
+        # Χ©Χ•ΧΧ¤Χ™Χ Χ¨Χ§ Χ©ΧΧ•Χª ΧΧ©ΧªΧΧ© Χ›Χ“Χ™ ΧΧ©ΧΧ•Χ¨ ΧΆΧ ΧΧ‘ΧΧ—Χª Χ΅Χ™Χ΅ΧΧΧ•Χª
         cursor.execute("SELECT username FROM users")
         rows = cursor.fetchall()
         conn.close()
@@ -63,7 +63,7 @@ def get_all_games():
         return []
 
 async def broadcast_game_state():
-    """ξωγψ ΰϊ ϊηιμϊ δξωηχ ψχ μωηχπιν ωπξφΰιν αϊεκ ξφα ΰεπμιιο"""
+    """ΧΧ©Χ“Χ¨ ΧΧª ΧªΧ—Χ™ΧΧª Χ”ΧΧ©Χ—Χ§ Χ¨Χ§ ΧΧ©Χ—Χ§Χ Χ™Χ Χ©Χ ΧΧ¦ΧΧ™Χ Χ‘ΧªΧ•Χ ΧΧ¦Χ‘ ΧΧ•Χ ΧΧ™Χ™Χ"""
     x_user = next((info["username"] for info in connected_players.values() if info.get("role") == "X" and info.get("in_online")), None)
     o_user = next((info["username"] for info in connected_players.values() if info.get("role") == "O" and info.get("in_online")), None)
     
@@ -88,10 +88,10 @@ async def handler(ws):
                 if isinstance(data, dict) and "action" in data:
                     action = data["action"]
                     
-                    # --- δϊηαψεϊ αριριϊ αμαγ ---
+                    # --- Χ”ΧªΧ—Χ‘Χ¨Χ•Χª Χ‘Χ΅Χ™Χ΅Χ™Χª Χ‘ΧΧ‘Χ“ ---
                     if action == "login":
                         success = check_login(data["username"], data["password"])
-                        is_admin = (data["username"] == "noam123") # αγιχϊ ξπδμ
+                        is_admin = (data["username"] == "noam123") # Χ‘Χ“Χ™Χ§Χª ΧΧ Χ”Χ
                         
                         if success:
                             connected_players[ws] = {"username": data["username"], "role": None, "in_online": False}
@@ -104,7 +104,7 @@ async def handler(ws):
                         }))
                         continue
                     
-                    # --- αχωεϊ τΰπμ ξπδμ ---
+                    # --- Χ‘Χ§Χ©Χ•Χª Χ¤ΧΧ Χ ΧΧ Χ”Χ ---
                     elif action == "get_users":
                         if ws in connected_players and connected_players[ws]["username"] == "noam123":
                             users = get_all_users()
@@ -117,7 +117,7 @@ async def handler(ws):
                             await ws.send(json.dumps({"action": "admin_games_data", "data": games}))
                         continue
                     
-                    # --- δφθψτεϊ ΰχθιαιϊ μξφα ΰεπμιιο ---
+                    # --- Χ”Χ¦ΧΧ¨Χ¤Χ•Χª ΧΧ§ΧΧ™Χ‘Χ™Χª ΧΧΧ¦Χ‘ ΧΧ•Χ ΧΧ™Χ™Χ ---
                     elif action == "join_online":
                         if ws in connected_players and not connected_players[ws]["in_online"]:
                             connected_players[ws]["in_online"] = True
@@ -133,7 +133,7 @@ async def handler(ws):
                             await broadcast_game_state()
                         continue
 
-                    # --- ιφιΰδ ξξφα ΰεπμιιο μθεαϊ AI/Local ---
+                    # --- Χ™Χ¦Χ™ΧΧ” ΧΧΧ¦Χ‘ ΧΧ•Χ ΧΧ™Χ™Χ ΧΧΧ•Χ‘Χª AI/Local ---
                     elif action == "leave_online":
                         if ws in connected_players and connected_players[ws]["in_online"]:
                             connected_players[ws]["in_online"] = False
@@ -142,15 +142,15 @@ async def handler(ws):
                             
                             if role_freed in ["X", "O"]:
                                 available_roles.append(role_freed)
-                                available_roles.sort(reverse=True) # ξαθιη ω-X ιηεμχ ωεα μτπι O
+                                available_roles.sort(reverse=True) # ΧΧ‘ΧΧ™Χ— Χ©-X Χ™Χ—Χ•ΧΧ§ Χ©Χ•Χ‘ ΧΧ¤Χ Χ™ O
                                 
-                                # ξςγλο ΰϊ δωηχπιν ωπωΰψε αΰεπμιιο
+                                # ΧΧΆΧ“Χ›Χ ΧΧª Χ”Χ©Χ—Χ§Χ Χ™Χ Χ©Χ Χ©ΧΧ¨Χ• Χ‘ΧΧ•Χ ΧΧ™Χ™Χ
                                 for client, p in connected_players.items():
                                     if client != ws and p.get("in_online"):
                                         await client.send(json.dumps({"action": "player_disconnected", "role": role_freed}))
                         continue
                     
-                    # --- ςγλεο δβγψεϊ (ψχ X ιλεμ μωπεϊ) ---
+                    # --- ΧΆΧ“Χ›Χ•Χ Χ”Χ’Χ“Χ¨Χ•Χª (Χ¨Χ§ X Χ™Χ›Χ•Χ ΧΧ©Χ Χ•Χª) ---
                     elif action == "update_settings":
                         if ws in connected_players and connected_players[ws].get("role") == "X":
                             game_settings["rows"] = data.get("rows", 3)
@@ -161,31 +161,31 @@ async def handler(ws):
                                 "action": "update_settings",
                                 "settings": game_settings
                             })
-                            # ωεμηιν μλεμν αΰεπμιιο λγι ωιρϊπλψπε
+                            # Χ©Χ•ΧΧ—Χ™Χ ΧΧ›Χ•ΧΧ Χ‘ΧΧ•Χ ΧΧ™Χ™Χ Χ›Χ“Χ™ Χ©Χ™Χ΅ΧªΧ Χ›Χ¨Χ Χ•
                             for client, p in connected_players.items():
                                 if client != ws and p.get("in_online"):
                                     await client.send(update_msg)
                         continue
                     
-                    # --- ωξιψϊ ξωηχ ---
+                    # --- Χ©ΧΧ™Χ¨Χª ΧΧ©Χ—Χ§ ---
                     elif action == "save_game":
                         save_game_to_db(data["user1"], data["user2"], data["winner"])
                         continue
                     
-                    # --- πιδεμ ξδμλιν ---
+                    # --- Χ Χ™Χ”Χ•Χ ΧΧ”ΧΧ›Χ™Χ ---
                     elif action == "move":
-                        # αγιχδ δΰν ιω αΰξϊ 2 ωηχπιν ΰεπμιιο
+                        # Χ‘Χ“Χ™Χ§Χ” Χ”ΧΧ Χ™Χ© Χ‘ΧΧΧª 2 Χ©Χ—Χ§Χ Χ™Χ ΧΧ•Χ ΧΧ™Χ™Χ
                         x_present = any(p.get("role") == "X" and p.get("in_online") for p in connected_players.values())
                         o_present = any(p.get("role") == "O" and p.get("in_online") for p in connected_players.values())
                         
                         if not (x_present and o_present):
                             await ws.send(json.dumps({
                                 "action": "error",
-                                "message": "δωηχο δωπι ΰιπε ξηεαψ. ΰι ΰτωψ μωηχ μαγ."
+                                "message": "Χ”Χ©Χ—Χ§Χ Χ”Χ©Χ Χ™ ΧΧ™Χ Χ• ΧΧ—Χ•Χ‘Χ¨. ΧΧ™ ΧΧ¤Χ©Χ¨ ΧΧ©Χ—Χ§ ΧΧ‘Χ“."
                             }))
                             continue
                             
-                        # ξςαιψιν ΰϊ δξδμκ
+                        # ΧΧΆΧ‘Χ™Χ¨Χ™Χ ΧΧª Χ”ΧΧ”ΧΧ
                         for client, p in connected_players.items():
                             if client != ws and p.get("in_online"):
                                 await client.send(message)
@@ -199,7 +199,7 @@ async def handler(ws):
     finally:
         clients.remove(ws)
         if ws in connected_players:
-            # ωηψεψ δϊτχιγ βν αξχψδ ωμ ρβιψϊ ημεο (πιϊεχ λτει)
+            # Χ©Χ—Χ¨Χ•Χ¨ Χ”ΧªΧ¤Χ§Χ™Χ“ Χ’Χ Χ‘ΧΧ§Χ¨Χ” Χ©Χ Χ΅Χ’Χ™Χ¨Χª Χ—ΧΧ•Χ (Χ Χ™ΧªΧ•Χ§ Χ›Χ¤Χ•Χ™)
             if connected_players[ws].get("in_online"):
                 role_freed = connected_players[ws].get("role")
                 if role_freed in ["X", "O"]:
