@@ -20,7 +20,9 @@ let onlineGameStarted = false;
 let windows = [];
 let cellToWindows = [];
 
-let boardDiv, statusDiv, resetBtn, colsInput, rowsInput, winInput;
+let boardDiv, boardWrap, statusDiv, resetBtn, colsInput, rowsInput, winInput;
+let resultModal, resultCard, resultIcon, resultTitle, resultText;
+let resizeRaf = null;
 
 const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
 
@@ -48,12 +50,18 @@ function handleSettingsChange() {
 
 document.addEventListener("DOMContentLoaded", () => {
     boardDiv = document.getElementById("board");
+    boardWrap = document.querySelector(".board-wrap");
     statusDiv = document.getElementById("status");
     resetBtn = document.getElementById("resetBtn");
     rowsInput = document.getElementById("rows");
     colsInput = document.getElementById("cols");
     winInput = document.getElementById("winLength");
 
+    resultModal = document.getElementById("resultModal");
+    resultCard = document.getElementById("resultCard");
+    resultIcon = document.getElementById("resultIcon");
+    resultTitle = document.getElementById("resultTitle");
+    resultText = document.getElementById("resultText");
     rowsInput.addEventListener("change", handleSettingsChange);
     colsInput.addEventListener("change", handleSettingsChange);
     winInput.addEventListener("change", handleSettingsChange);
@@ -62,8 +70,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("loginForm").addEventListener("submit", (e) => {
         e.preventDefault(); // עצור! מונע מהדף להתרענן ולנתק את ה-WebSocket
 
-        const user = document.getElementById("loginUser").value;
+        const user = document.getElementById("loginUser").value.trim();
         const pass = document.getElementById("loginPass").value;
+        document.getElementById("loginError").classList.add("is-hidden");
 
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ action: "login", username: user, password: pass }));
@@ -96,15 +105,17 @@ document.addEventListener("DOMContentLoaded", () => {
             if (data.action === "login_response") {
                 if (data.success) {
                     currentUser = data.username;
-                    document.getElementById("loginModal").style.display = "none";
+                    document.getElementById("loginModal").classList.add("is-hidden");
 
                     // === תוספת עבור פאנל הניהול ===
                     if (data.is_admin) {
-                        document.getElementById("adminPanel").style.display = "flex";
+                        document.getElementById("adminPanel").classList.remove("is-hidden");
+                        // הופעת פאנל המנהל משנה מעט את רוחב אזור הלוח.
+                        requestAnimationFrame(scheduleBoardResize);
                     }
                     // ==================================
                 } else {
-                    document.getElementById("loginError").style.display = "block";
+                    document.getElementById("loginError").classList.remove("is-hidden");
                 }
                 return;
             }
@@ -198,17 +209,26 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".mode").forEach(btn => {
         btn.addEventListener("click", () => {
             const oldMode = gameMode;
-            document.querySelectorAll(".mode").forEach(b => b.classList.remove("active"));
-            btn.classList.add("active");
+
+            document.querySelectorAll(".mode").forEach(b => {
+                const isActive = b === btn;
+                b.classList.toggle("active", isActive);
+                b.setAttribute("aria-selected", String(isActive));
+            });
+
             gameMode = btn.dataset.mode;
 
             // שליחת בקשות לשרת בעת שינוי מצב משחק
-            if (gameMode === "online" && oldMode !== "online") {
-                ws.send(JSON.stringify({ action: "join_online" }));
-            } else if (gameMode !== "online" && oldMode === "online") {
-                ws.send(JSON.stringify({ action: "leave_online" }));
-                myRole = null;
-                onlineGameStarted = false;
+            if (ws.readyState === WebSocket.OPEN) {
+                if (gameMode === "online" && oldMode !== "online") {
+                    ws.send(JSON.stringify({ action: "join_online" }));
+                } else if (gameMode !== "online" && oldMode === "online") {
+                    ws.send(JSON.stringify({ action: "leave_online" }));
+                    myRole = null;
+                    onlineGameStarted = false;
+                }
+            } else if (gameMode === "online") {
+                alert("השרת לא מחובר, ולכן כרגע אי אפשר לעבור למצב אונליין.");
             }
 
             startGame();
@@ -226,10 +246,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    window.addEventListener("resize", scheduleBoardResize);
+    window.addEventListener("orientationchange", scheduleBoardResize);
+
     startGame();
 });
 
 function startGame() {
+    hideGameResult();
+
+    document.querySelectorAll(".winning-cell").forEach(cell => {
+        cell.classList.remove("winning-cell");
+    });
+
     if (gameMode === "online" && myRole === "O") {
         rowsInput.disabled = true;
         colsInput.disabled = true;
@@ -263,8 +292,7 @@ function startGame() {
     }
 
     boardDiv.innerHTML = "";
-    boardDiv.style.setProperty('--cols', String(cols));
-    boardDiv.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    boardDiv.style.setProperty("--cols", String(cols));
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -276,77 +304,7 @@ function startGame() {
         }
     }
 
-    requestAnimationFrame(() => {
-        const rootStyle = getComputedStyle(document.documentElement);
-        let gapPx = parseInt(rootStyle.getPropertyValue('--gap')) || 4;
-        const controlsW = parseInt(rootStyle.getPropertyValue('--controls-width')) || 200;
-        const titleW = parseInt(rootStyle.getPropertyValue('--title-width')) || 260;
-        const topGap = parseInt(rootStyle.getPropertyValue('--top-gap')) || 78;
-
-        const boardComputed = getComputedStyle(boardDiv);
-        const boardPaddingLeft = parseInt(boardComputed.paddingLeft) || 10;
-        const boardPaddingRight = parseInt(boardComputed.paddingRight) || 10;
-        const boardPaddingTop = parseInt(boardComputed.paddingTop) || 10;
-        const boardPaddingBottom = parseInt(boardComputed.paddingBottom) || 10;
-        const boardPaddingH = boardPaddingLeft + boardPaddingRight;
-        const boardPaddingV = boardPaddingTop + boardPaddingBottom;
-
-        const horizSafety = 24;
-        const vertSafety = 48;
-
-        const middleAvailableWidth = Math.max(80, window.innerWidth - controlsW - titleW - horizSafety);
-        const middleAvailableHeight = Math.max(80, window.innerHeight - topGap - vertSafety);
-
-        const boardWrap = document.querySelector('.board-wrap');
-        if (boardWrap) {
-            boardWrap.style.width = `${middleAvailableWidth}px`;
-            boardWrap.style.maxWidth = `${middleAvailableWidth}px`;
-            boardWrap.style.margin = '0 auto';
-            boardWrap.style.boxSizing = 'border-box';
-            boardWrap.style.display = 'flex';
-            boardWrap.style.justifyContent = 'center';
-            boardWrap.style.alignItems = 'center';
-            boardWrap.style.maxHeight = `${middleAvailableHeight}px`;
-            boardWrap.style.overflow = 'hidden';
-        }
-
-        const cellSizeByWidth = Math.floor((middleAvailableWidth - (cols - 1) * gapPx - boardPaddingH) / cols);
-        const cellSizeByHeight = Math.floor((middleAvailableHeight - (rows - 1) * gapPx - boardPaddingV) / rows);
-
-        const minCell = 8;
-        const maxCell = 140;
-        let cellSize = Math.max(minCell, Math.min(cellSizeByWidth, cellSizeByHeight, maxCell));
-
-        if (cellSize < minCell) {
-            const minimalGap = 2;
-            let gapTry = gapPx;
-            while (cellSize < minCell && gapTry > minimalGap) {
-                gapTry = Math.max(minimalGap, Math.floor(gapTry * 0.8));
-                const byW = Math.floor((middleAvailableWidth - (cols - 1) * gapTry - boardPaddingH) / cols);
-                const byH = Math.floor((middleAvailableHeight - (rows - 1) * gapTry - boardPaddingV) / rows);
-                cellSize = Math.max(minCell, Math.min(byW, byH));
-                if (gapTry === minimalGap) break;
-            }
-            gapPx = gapTry;
-            boardDiv.style.setProperty('--gap', `${gapPx}px`);
-        }
-
-        boardDiv.style.setProperty('--cell-size', `${cellSize}px`);
-        boardDiv.style.setProperty('--cols', String(cols));
-        boardDiv.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
-
-        const effectiveGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || gapPx;
-        const innerWidth = cols * cellSize + (cols - 1) * effectiveGap + boardPaddingH;
-        const innerHeight = rows * cellSize + (rows - 1) * effectiveGap + boardPaddingV;
-
-        const finalWidth = Math.min(innerWidth, middleAvailableWidth);
-        const finalHeight = Math.min(innerHeight, middleAvailableHeight);
-
-        boardDiv.style.width = `${finalWidth}px`;
-        boardDiv.style.height = `${finalHeight}px`;
-        boardDiv.style.boxSizing = 'border-box';
-        boardDiv.style.margin = '0 auto';
-    });
+    scheduleBoardResize();
 
     buildWindows();
 
@@ -356,6 +314,66 @@ function startGame() {
     } else {
         updateStatus();
     }
+}
+
+function scheduleBoardResize() {
+    if (resizeRaf !== null) cancelAnimationFrame(resizeRaf);
+
+    resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = null;
+        resizeBoard();
+    });
+}
+
+function resizeBoard() {
+    if (!boardDiv || !boardWrap || rows < 1 || cols < 1) return;
+
+    const wrapStyle = getComputedStyle(boardWrap);
+    const wrapPaddingH =
+        (parseFloat(wrapStyle.paddingLeft) || 0) +
+        (parseFloat(wrapStyle.paddingRight) || 0);
+    const wrapPaddingV =
+        (parseFloat(wrapStyle.paddingTop) || 0) +
+        (parseFloat(wrapStyle.paddingBottom) || 0);
+
+    const availableWidth = Math.max(120, boardWrap.clientWidth - wrapPaddingH - 2);
+    const isMobile = window.matchMedia("(max-width: 900px)").matches;
+    const isSmallPhone = window.matchMedia("(max-width: 560px)").matches;
+
+    // בלוחות גדולים מצמצמים כמעט לגמרי את הרווחים והמסגרת,
+    // כדי שכל פיקסל פנוי יעבור לגודל המשבצות.
+    let gap = 3;
+    if (cols >= 24 || rows >= 24) gap = 1;
+    else if (cols >= 10 || rows >= 10) gap = 2;
+
+    let boardPadding = isSmallPhone ? 2 : (isMobile ? 3 : 5);
+    if (cols >= 20 || rows >= 20) boardPadding = 1;
+
+    const widthForCells = availableWidth - (2 * boardPadding) - ((cols - 1) * gap);
+    const cellSizeByWidth = Math.floor(widthForCells / cols);
+
+    let cellSizeByHeight = Infinity;
+    if (!isMobile) {
+        // במחשב אזור הלוח מקבל את כל גובה המסך שנותר. השימוש בגובה
+        // האמיתי שלו מאפשר למשבצות לגדול בלי להיחתך.
+        const availableHeight = Math.max(120, boardWrap.clientHeight - wrapPaddingV - 2);
+        const heightForCells = availableHeight - (2 * boardPadding) - ((rows - 1) * gap);
+        cellSizeByHeight = Math.floor(heightForCells / rows);
+    }
+
+    const minCell = isSmallPhone ? 7 : 9;
+    const maxCell = isMobile ? 140 : 210;
+
+    let cellSize = Math.min(cellSizeByWidth, cellSizeByHeight, maxCell);
+    if (!Number.isFinite(cellSize)) cellSize = Math.min(cellSizeByWidth, maxCell);
+    cellSize = Math.max(minCell, Math.floor(cellSize));
+
+    boardDiv.style.setProperty("--cols", String(cols));
+    boardDiv.style.setProperty("--cell-size", `${cellSize}px`);
+    boardDiv.style.setProperty("--board-gap", `${gap}px`);
+    boardDiv.style.setProperty("--board-padding", `${boardPadding}px`);
+    boardDiv.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+    boardDiv.style.gridTemplateRows = `repeat(${rows}, var(--cell-size))`;
 }
 
 function updateStatus(text) {
@@ -417,12 +435,18 @@ function makeMove(r, c, player, cell = null) {
     for (const wi of cellToWindows[idx]) {
         const w = windows[wi];
         if (numBoard[r][c] === 1 && w.countAI >= winLength) {
-            gameOver = true; updateStatus(`O ניצח!`); highlightWinFromWindow(w);
+            gameOver = true;
+            updateStatus("O ניצח!");
+            highlightWinFromWindow(w);
+            showGameResult("win", "O");
             checkAndSaveGame("O");
             return;
         }
         if (numBoard[r][c] === -1 && w.countHuman >= winLength) {
-            gameOver = true; updateStatus(`X ניצח!`); highlightWinFromWindow(w);
+            gameOver = true;
+            updateStatus("X ניצח!");
+            highlightWinFromWindow(w);
+            showGameResult("win", "X");
             checkAndSaveGame("X");
             return;
         }
@@ -431,9 +455,34 @@ function makeMove(r, c, player, cell = null) {
     if (isDraw()) {
         gameOver = true;
         updateStatus("תיקו!");
+        showGameResult("draw");
         checkAndSaveGame("תיקו");
     }
     else updateStatus();
+}
+
+function showGameResult(result, winner = null) {
+    if (!resultModal || !resultCard) return;
+
+    resultCard.classList.remove("win-x", "win-o", "draw");
+
+    if (result === "draw") {
+        resultCard.classList.add("draw");
+        resultIcon.textContent = "🤝";
+        resultTitle.textContent = "תיקו!";
+        resultText.textContent = "המשחק הסתיים ללא מנצח";
+    } else {
+        resultCard.classList.add(winner === "X" ? "win-x" : "win-o");
+        resultIcon.textContent = winner;
+        resultTitle.textContent = `${winner} ניצח!`;
+        resultText.textContent = "כל הכבוד! נוצר רצף מנצח";
+    }
+
+    resultModal.classList.add("show");
+}
+
+function hideGameResult() {
+    if (resultModal) resultModal.classList.remove("show");
 }
 
 function checkAndSaveGame(winnerPiece) {
@@ -481,6 +530,7 @@ function highlightWinFromWindow(win) {
             const player = numBoard[r][c] === 1 ? 'O' : 'X';
             el.style.backgroundColor = player === 'X' ? '#3b82f6' : '#ef4444';
             el.style.color = '#fff';
+            el.classList.add("winning-cell");
         }
     });
 }
@@ -742,7 +792,7 @@ function requestAdminData(actionType) {
 
 // סגירת החלון
 function closeAdminModal() {
-    document.getElementById("adminModal").style.display = "none";
+    document.getElementById("adminModal").classList.add("is-hidden");
 }
 
 // פונקציית עזר לציור הטבלה
@@ -765,12 +815,12 @@ function renderAdminTable(title, headers, rows) {
     });
 
     if (rows.length === 0) {
-        html += `<tr><td colspan="${headers.length}" style="text-align: center;">אין נתונים להצגה</td></tr>`;
+        html += `<tr><td colspan="${headers.length}" class="empty-table">אין נתונים להצגה</td></tr>`;
     }
 
     html += "</tbody>";
     table.innerHTML = html;
 
     // מציג את החלון
-    document.getElementById("adminModal").style.display = "flex";
+    document.getElementById("adminModal").classList.remove("is-hidden");
 }
