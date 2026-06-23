@@ -8,7 +8,7 @@ let gameOver = false;
 let rows = 3, cols = 3, winLength = 3;
 
 // --- משתני שרת והתחברות ---
-let ws = new WebSocket("ws://10.77.163.140:8765");
+let ws = new WebSocket("ws:// 10.0.0.216:8765");
 let currentUser = null;
 let playerXUser = null;
 let playerOUser = null;
