@@ -412,11 +412,7 @@ function handleClick(r, c, cell) {
     switchPlayer();
 
     if (gameMode === "ai" && currentPlayer === "O") {
-        if (rows === 3 && cols === 3 && winLength === 3) {
-            setTimeout(() => aiMoveMinimax(), 120);
-        } else {
-            setTimeout(() => aiMove(), 120);
-        }
+        aiMove()
     }
 }
 
@@ -623,164 +619,260 @@ function simulatePlacementMetrics(r, c, playerNumeric) {
 
 function aiMove() {
     if (gameOver) return;
+
     const move = blackAlgorithm();
     if (!move) return;
+
     const { r, c } = move;
     const cell = document.getElementById(`${r}-${c}`);
-    makeMove(r, c, 'O', cell);
+    makeMove(r, c, "O", cell);
+
     if (!gameOver) switchPlayer();
 }
 
-function getCandidateMoves(radius = 2) {
-    const candidates = new Set();
-    let anyStone = false;
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (numBoard[r][c] !== 0) anyStone = true;
-    if (!anyStone) {
-        const cr = Math.floor((rows - 1) / 2), cc = Math.floor((cols - 1) / 2);
-        return [{ r: cr, c: cc }];
-    }
+function getCandidateMoves() {
+    // אין הגבלת רדיוס: כל משבצת ריקה בלוח היא מהלך חוקי אפשרי.
+    const candidates = [];
+
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            if (numBoard[r][c] !== 0) {
-                for (let dr = -radius; dr <= radius; dr++) {
-                    for (let dc = -radius; dc <= radius; dc++) {
-                        const rr = r + dr, cc = c + dc;
-                        if (!inBounds(rr, cc)) continue;
-                        if (numBoard[rr][cc] === 0) candidates.add(rr * cols + cc);
-                    }
-                }
+            if (numBoard[r][c] === 0) {
+                candidates.push({ r, c });
             }
         }
     }
-    return Array.from(candidates).map(idx => ({ r: Math.floor(idx / cols), c: idx % cols }));
+
+    return candidates;
+}
+
+// ערך גדול מאוד למצבי ניצחון בחיפוש.
+const SEARCH_WIN_SCORE = 1_000_000_000_000_000;
+
+function getCenterBonus(r, c) {
+    const centerR = (rows - 1) / 2;
+    const centerC = (cols - 1) / 2;
+    const maxDist = Math.max(1, centerR + centerC);
+    const dist = Math.abs(r - centerR) + Math.abs(c - centerC);
+    return ((maxDist - dist) / maxDist) * 8;
+}
+
+function getPatternValue(count) {
+    if (count <= 0) return 0;
+
+    // הגבלה על החזקה מונעת מספרים עצומים מדי בלוחות עם רצף גדול.
+    const cappedCount = Math.min(count, 12);
+    const extraCount = Math.max(0, count - 12);
+    return Math.pow(4, cappedCount) * (1 + extraCount * 4);
+}
+
+function evaluateWindowScore(w) {
+    if (w.countAI >= winLength) return SEARCH_WIN_SCORE;
+    if (w.countHuman >= winLength) return -SEARCH_WIN_SCORE;
+
+    // רצף שמכיל גם X וגם O כבר חסום לשני הצדדים.
+    if (w.countAI > 0 && w.countHuman > 0) return 0;
+
+    if (w.countAI > 0) {
+        const openness = 1 + (w.empties / Math.max(1, winLength)) * 0.12;
+        return getPatternValue(w.countAI) * openness;
+    }
+
+    if (w.countHuman > 0) {
+        const openness = 1 + (w.empties / Math.max(1, winLength)) * 0.12;
+        // נותנים מעט יותר משקל להגנה, כדי שהמחשב לא יתעלם מאיום של X.
+        return -getPatternValue(w.countHuman) * openness * 1.12;
+    }
+
+    return 0;
+}
+
+function evaluateBoardHeuristic() {
+    let score = 0;
+
+    for (const w of windows) {
+        const windowScore = evaluateWindowScore(w);
+
+        if (windowScore >= SEARCH_WIN_SCORE) return SEARCH_WIN_SCORE;
+        if (windowScore <= -SEARCH_WIN_SCORE) return -SEARCH_WIN_SCORE;
+
+        score += windowScore;
+    }
+
+    return score;
+}
+
+function evaluateWindowsContainingCell(r, c) {
+    const idx = r * cols + c;
+    let score = 0;
+
+    for (const wi of cellToWindows[idx]) {
+        score += evaluateWindowScore(windows[wi]);
+    }
+
+    return score;
+}
+
+function placeTemporaryMove(r, c, playerNumeric) {
+    numBoard[r][c] = playerNumeric;
+    board[r][c] = playerNumeric === 1 ? "O" : "X";
+    updateWindowsOnPlace(r, c, playerNumeric);
+}
+
+function removeTemporaryMove(r, c, playerNumeric) {
+    updateWindowsOnRemove(r, c, playerNumeric);
+    numBoard[r][c] = 0;
+    board[r][c] = "";
+}
+
+function getMovePriorityScore(r, c) {
+    const attack = simulatePlacementMetrics(r, c, 1);
+    const defence = simulatePlacementMetrics(r, c, -1);
+
+    let score = 0;
+
+    // סדרי הגודל נועדו לכך שמצבים טקטיים יהיו חשובים יותר מעיצוב עמדה כללי.
+    if (attack.immediateWin) score += 1_000_000_000_000;
+    if (defence.immediateWin) score += 900_000_000_000;
+
+    score += attack.near * 2_000_000;
+    score += defence.near * 1_850_000;
+    score += attack.open3 * 45_000;
+    score += defence.open3 * 42_000;
+    score += attack.neighbours * 220;
+    score += defence.neighbours * 200;
+    score += getCenterBonus(r, c);
+
+    return score;
+}
+
+function getMinimaxCandidateLimit(numberOfEmptyCells) {
+    // בלוחות קטנים, ובפרט 3x3, בודקים את כל המהלכים של O.
+    if (numberOfEmptyCells <= 16) return numberOfEmptyCells;
+
+    const boardSize = rows * cols;
+    if (boardSize <= 100) return 18;
+    if (boardSize <= 400) return 14;
+    return 10;
+}
+
+function chooseMoveWithDepthTwo(candidates) {
+    const rankedMoves = candidates
+        .map(move => ({
+            ...move,
+            priority: getMovePriorityScore(move.r, move.c)
+        }))
+        .sort((a, b) => b.priority - a.priority);
+
+    const candidateLimit = getMinimaxCandidateLimit(rankedMoves.length);
+    const topMoves = rankedMoves.slice(0, candidateLimit);
+
+    let bestValue = -Infinity;
+    let bestMoves = [];
+
+    for (const move of topMoves) {
+        placeTemporaryMove(move.r, move.c, 1);
+
+        let moveValue;
+        const boardScoreAfterAI = evaluateBoardHeuristic();
+
+        if (boardScoreAfterAI >= SEARCH_WIN_SCORE) {
+            moveValue = SEARCH_WIN_SCORE;
+        } else {
+            const humanReplies = getCandidateMoves();
+
+            if (humanReplies.length === 0) {
+                moveValue = boardScoreAfterAI;
+            } else {
+                // X בוחר את התגובה שמביאה לציון הנמוך ביותר עבור O.
+                let worstReplyValue = Infinity;
+
+                for (const reply of humanReplies) {
+                    const replyMetrics = simulatePlacementMetrics(reply.r, reply.c, -1);
+                    const oldAffectedScore = evaluateWindowsContainingCell(reply.r, reply.c);
+
+                    placeTemporaryMove(reply.r, reply.c, -1);
+
+                    const newAffectedScore = evaluateWindowsContainingCell(reply.r, reply.c);
+                    let replyValue = boardScoreAfterAI - oldAffectedScore + newAffectedScore;
+
+                    // חיזוק נוסף להבנת איומים מיידיים ושני איומים במקביל.
+                    if (replyMetrics.immediateWin) {
+                        replyValue = -SEARCH_WIN_SCORE;
+                    } else {
+                        replyValue -= replyMetrics.near * 120_000;
+                        replyValue -= replyMetrics.open3 * 3_500;
+                        replyValue -= replyMetrics.neighbours * 18;
+                        replyValue -= getCenterBonus(reply.r, reply.c) * 0.4;
+                    }
+
+                    removeTemporaryMove(reply.r, reply.c, -1);
+
+                    if (replyValue < worstReplyValue) {
+                        worstReplyValue = replyValue;
+                    }
+
+                    // גיזום: אם כבר נמצאה תגובת X שהופכת את המהלך לגרוע
+                    // מהמהלך הטוב ביותר שמצאנו, אין צורך לבדוק את שאר התגובות.
+                    if (worstReplyValue <= bestValue) break;
+                }
+
+                moveValue = worstReplyValue;
+            }
+        }
+
+        removeTemporaryMove(move.r, move.c, 1);
+
+        // עדיפות קטנה לציון המיידי משמשת רק כששני ערכי Minimax כמעט זהים.
+        moveValue += move.priority * 0.000001;
+
+        if (moveValue > bestValue + 1e-7) {
+            bestValue = moveValue;
+            bestMoves = [{ r: move.r, c: move.c }];
+        } else if (Math.abs(moveValue - bestValue) <= 1e-7) {
+            bestMoves.push({ r: move.r, c: move.c });
+        }
+    }
+
+    if (bestMoves.length === 0) return null;
+    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
 
 function blackAlgorithm() {
     const candidates = getCandidateMoves();
-    if (!candidates || candidates.length === 0) {
-        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (numBoard[r][c] === 0) return { r, c, reason: 'fallback-empty' };
-        return null;
-    }
+    if (candidates.length === 0) return null;
 
-    for (const m of candidates) {
-        const sim = simulatePlacementMetrics(m.r, m.c, 1);
-        if (sim.immediateWin) return { r: m.r, c: m.c, reason: 'win-immediate' };
-    }
-
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (numBoard[r][c] !== 0) continue;
-            const simOpp = simulatePlacementMetrics(r, c, -1);
-            if (simOpp.immediateWin) {
-                for (const m of candidates) { if (simulatePlacementMetrics(m.r, m.c, 1).immediateWin) return { r: m.r, c: m.c, reason: 'win-immediate' } }
-                return { r, c, reason: 'block-opponent-win' };
-            }
+    // 1. אם O יכול לנצח עכשיו, אין צורך להמשיך לחפש.
+    for (const move of candidates) {
+        if (simulatePlacementMetrics(move.r, move.c, 1).immediateWin) {
+            return { r: move.r, c: move.c, reason: "win-immediate" };
         }
     }
 
-    for (const m of candidates) {
-        const sim = simulatePlacementMetrics(m.r, m.c, 1);
-        if (sim.near >= 2) return { r: m.r, c: m.c, reason: 'double-four-ai' };
-    }
-
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (numBoard[r][c] !== 0) continue;
-            const simOpp = simulatePlacementMetrics(r, c, -1);
-            if (simOpp.near >= 2) return { r, c, reason: 'block-double-four-opponent' };
+    // 2. אם ל-X יש מהלך ניצחון יחיד, חייבים לחסום אותו מיד.
+    const immediateHumanWins = [];
+    for (const move of candidates) {
+        if (simulatePlacementMetrics(move.r, move.c, -1).immediateWin) {
+            immediateHumanWins.push(move);
         }
     }
 
-    let bestScore = -Infinity;
-    let bestMoves = [];
-
-    for (const m of candidates) {
-        const simAI = simulatePlacementMetrics(m.r, m.c, 1);
-        const simOppIfAI = simulatePlacementMetrics(m.r, m.c, -1);
-        const scoreAttack = simAI.near * 100 + simAI.open3 * 30 + simAI.neighbours * 5;
-        const scoreDefend = simOppIfAI.near * 100 + simOppIfAI.open3 * 30 + simOppIfAI.neighbours * 5;
-        let score = scoreAttack + scoreDefend * 0.9;
-
-        const centerR = (rows - 1) / 2, centerC = (cols - 1) / 2;
-        const maxDist = centerR + centerC;
-        const dist = Math.abs(m.r - centerR) + Math.abs(m.c - centerC);
-        score += ((maxDist - dist) / Math.max(1, maxDist)) * 5;
-
-        score += Math.random() * 0.0001;
-
-        if (score > bestScore + 1e-9) { bestScore = score; bestMoves = [{ r: m.r, c: m.c }]; }
-        else if (Math.abs(score - bestScore) < 1e-9) bestMoves.push({ r: m.r, c: m.c });
+    if (immediateHumanWins.length === 1) {
+        return {
+            r: immediateHumanWins[0].r,
+            c: immediateHumanWins[0].c,
+            reason: "block-opponent-win"
+        };
     }
 
-    if (bestMoves.length > 0) return bestMoves[Math.floor(Math.random() * bestMoves.length)];
-
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (numBoard[r][c] === 0) return { r, c, reason: 'fallback' };
-    return null;
-}
-
-function aiMoveMinimax() {
-    if (gameOver) return;
-    const best = minimaxRoot();
-    if (!best) return;
-    makeMove(best.r, best.c, 'O', document.getElementById(`${best.r}-${best.c}`));
-    if (!gameOver) switchPlayer();
-}
-
-function minimaxRoot() {
-    let bestVal = -Infinity;
-    let bestMove = null;
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (numBoard[r][c] !== 0) continue;
-            board[r][c] = 'O'; numBoard[r][c] = 1; updateWindowsOnPlace(r, c, 1);
-            const val = minimax(0, false);
-            updateWindowsOnRemove(r, c, 1); board[r][c] = ''; numBoard[r][c] = 0;
-            if (val > bestVal + 1e-9) { bestVal = val; bestMove = { r, c }; }
-        }
-    }
-    return bestMove;
-}
-
-function minimax(depth, isMaximizing) {
-    const term = checkTerminalFast();
-    if (term !== null) {
-        if (term > 0) return term - depth;
-        if (term < 0) return term + depth;
-        return 0;
+    // 3. בשאר המצבים משתמשים ב-Minimax בעומק 2:
+    //    O מנסה מהלך, ואז X מנסה כל תגובה חוקית ללא הגבלת רדיוס.
+    const minimaxMove = chooseMoveWithDepthTwo(candidates);
+    if (minimaxMove) {
+        return { ...minimaxMove, reason: "depth-two-minimax" };
     }
 
-    if (isMaximizing) {
-        let best = -Infinity;
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                if (numBoard[r][c] !== 0) continue;
-                board[r][c] = 'O'; numBoard[r][c] = 1; updateWindowsOnPlace(r, c, 1);
-                const val = minimax(depth + 1, false);
-                updateWindowsOnRemove(r, c, 1); board[r][c] = ''; numBoard[r][c] = 0;
-                if (val > best) best = val;
-            }
-        }
-        return best;
-    } else {
-        let best = Infinity;
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                if (numBoard[r][c] !== 0) continue;
-                board[r][c] = 'X'; numBoard[r][c] = -1; updateWindowsOnPlace(r, c, -1);
-                const val = minimax(depth + 1, true);
-                updateWindowsOnRemove(r, c, -1); board[r][c] = ''; numBoard[r][c] = 0;
-                if (val < best) best = val;
-            }
-        }
-        return best;
-    }
-}
-
-function checkTerminalFast() {
-    for (const w of windows) { if (w.countAI >= winLength) return 100; if (w.countHuman >= winLength) return -100; }
-    let anyEmpty = false; for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (numBoard[r][c] === 0) anyEmpty = true;
-    if (!anyEmpty) return 0;
-    return null;
+    // גיבוי למקרה חריג.
+    return candidates[0];
 }
 
 // שליחת בקשה לשרת
