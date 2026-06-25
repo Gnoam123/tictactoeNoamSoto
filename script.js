@@ -8,7 +8,7 @@ let gameOver = false; // שומר האם המשחק כבר הסתיים
 let rows = 3, cols = 3, winLength = 3; // שומר את מספר השורות בלוח
 
 // --- משתני שרת והתחברות ---
-let ws = new WebSocket("ws://192.168.150.151:8765"); // פותח חיבור WebSocket לשרת המשחק
+let ws = new WebSocket("ws://10.0.0.241:8765"); // פותח חיבור WebSocket לשרת המשחק
 let currentUser = null; // שומר את שם המשתמש שהתחבר
 let playerXUser = null; // שומר את שם המשתמש שמשחק בתפקיד X באונליין
 let playerOUser = null; // שומר את שם המשתמש שמשחק בתפקיד O באונליין
